@@ -40,12 +40,14 @@ def gap(merge_file):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pred_file", type=str, help="prediction file, a csv file", default = '../data/baseline_prediction.csv')
-    parser.add_argument("--y_file", type=str, help="ground truth file, a csv file", default = '../data/tags_test.csv')
+    parser.add_argument("--pred_file", type=str, help="prediction file, a csv file", default = '../data/original/tags_test.csv')
+    parser.add_argument("--y_file", type=str, help="ground truth file, a csv file", default = '../data/baseline_prediction.csv')
  
     args = parser.parse_args()
     pred_file = args.pred_file
     y_file = args.y_file
+
+    import pdb; pdb.set_trace()
 
     pred = pd.read_csv(pred_file)
     pred = pred[['AudioId','LabelConfidencePairs']]
