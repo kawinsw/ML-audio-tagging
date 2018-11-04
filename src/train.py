@@ -8,201 +8,125 @@ import zipfile
 import os
 import argparse
 
-from bs4 import BeautifulSoup as bs
-from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.model_selection import train_test_split
 import numpy as np
 np.random.seed(1111) 
 import pandas as pd
 import xgboost as xgb
+import average_precision_calculator
 
 NUM_PREPROCESS = "01"
+OUTPUT_PREFIX = "test"
 
-def decontracted(phrase): # to be fixed for all cases 
-    ## specific
-    phrase = re.sub(r"won't", "will not", phrase)
-    phrase = re.sub(r"can\'t", "can not", phrase)
-    ## general
-    phrase = re.sub(r"n\'t", " not", phrase)
-    phrase = re.sub(r"\'re", " are", phrase)
-    phrase = re.sub(r"\'s", " is", phrase)
-    phrase = re.sub(r"\'d", " would", phrase)
-    phrase = re.sub(r"\'ll", " will", phrase)
-    phrase = re.sub(r"\'t", " not", phrase)
-    phrase = re.sub(r"\'ve", " have", phrase)
-    phrase = re.sub(r"\'m", " am", phrase)
-    return phrase
+# DO NOT CHANGE THE FOLLOWING VAR
+NUM_CLASS = 22
 
-def infer_spaces(s):
-    """Uses dynamic programming to infer the location of spaces in a string
-    without spaces."""
-    ## Find the best match for the i first characters, assuming cost has
-    ## been built for the i-1 first characters.
-    ## Returns a pair (match_cost, match_length).
-    words = open("./../data/words_by_frequency.txt").read().split()
-    wordcost = dict((k, log((i+1)*log(len(words)))) for i,k in enumerate(words))
-    maxword = max(len(x) for x in words)
-    def best_match(i):
-        candidates = enumerate(reversed(cost[max(0, i-maxword):i]))
-        return min((c + wordcost.get(s[i-k-1:i], 9e999), k+1) for k,c in candidates)
+def process(label):
+    label_new = []
+    label = label.split()
+    for i in range(0,len(label),2):
+        label_new.append(label[i])
+    return label_new
 
-    cost = [0]
-    for i in range(1,len(s)+1):
-        c,k = best_match(i)
-        cost.append(c)
+def gap(merge_file):
+    conf = []
+    pred = []
+    label = []
+    true = []
+    for i in range(len(merge_file)):
+        pred_p = merge_file.iloc[i]['LabelConfidencePairs']
+        pred_p = pred_p.split()
+        labels = process(merge_file.iloc[i]['Labels'])
+        for a in range(0, len(pred_p),2):
+            if pred_p[a] in labels:
+                conf.append(float(pred_p[(a+1)]))
+                pred.append(pred_p[a])
+                label.append(merge_file.iloc[i]['Labels'])
+                true.append(1)
+            else:
+                conf.append(float(pred_p[(a+1)]))
+                pred.append(pred_p[a])
+                label.append(merge_file.iloc[i]['Labels'])
+                true.append(0)
 
-    out = []
-    i = len(s)
-    while i>0:
-        c,k = best_match(i)
-        assert c == cost[i]
-        out.append(s[i-k:i])
-        i -= k
+    x = pd.DataFrame({'pred': pred, 'conf': conf, 'label':label, 'true': true})
+    x = x.sort_values(by = 'conf', ascending = False)
+    p = x.conf.values
+    a = x.true.values
+    ap = average_precision_calculator.AveragePrecisionCalculator.ap(p, a)
+    return ap
 
-    return ' '.join(reversed(out))
-
-def rawtext_to_words(raw_text,remove_stopwords=True):
-    ## remove HTML
-    text = bs(raw_text, 'lxml').get_text()
-    ## remove non-letter
-    text = re.sub('[^a-zA-Z]',' ', text)
-    ## remove stopwords
-    words = text.lower().split()
-    if remove_stopwords:
-        stops = set(stopwords.words('english')) 
-        words = [w for w in words if not w in stops]
-    return ' '.join(words)
-
-def loadGloveModel(gloveFile):
-    print ("Loading GloVe Model")
-    f = open(gloveFile,'r')
-    model = {}
-    for line in f:
-        splitLine = line.split()
-        word = splitLine[0]
-        embedding = np.array([float(val) for val in splitLine[1:]])
-        model[word] = embedding
-    print ("Done.",len(model)," words loaded!")
-    return model
-
-def label_conf_pair(x, k = 5):
-    return ' '.join(["{} {:.4f}".format(a_, b_) for a_, b_ in zip(x.sort_values(ascending=False).index.values[:k], x.sort_values(ascending=False).values[:k])])
+def label_conf_pair(x, k = 5, threshold=False):
+    if threshold != False:
+        k = min(k, (x > threshold).sum())
+        k = max(k, 1)
+    label = ' '.join(["{} {:.4f}".format(a_, b_) for a_, b_ in zip(x.sort_values(ascending=False).index.values[:k], x.sort_values(ascending=False).values[:k])])
+    return label
 
 def main():
+    print('Loading...')
 
-    start = time.time()
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--sub_tr_dir", type=str, help="training subtitles, a json file", default = './../data/original/subtitle_train.json')
-    parser.add_argument("--sub_te_dir", type=str, help="testing subtitles, a json file", default = './../data/original/subtitle_test.json')
-    parser.add_argument("--label_train_dir", type=str, help="training tags, a csv file", default = './../data/original/tags_train.csv')
-    parser.add_argument("--label_test_dir", type=str, help="sample submission file, a csv file", default = './../data/original/tags_test.csv')
-    parser.add_argument("--pred_test_dir", type=str, help="submission file to save, a csv file", default = './../data/baseline_prediction.csv')
-
-    args = parser.parse_args()
-    sub_tr_dir = args.sub_tr_dir
-    sub_te_dir = args.sub_te_dir
-    label_train_dir = args.label_train_dir
-    label_test_dir = args.label_test_dir
-    pred_test_dir = args.pred_test_dir
-
-    ## load subtitles
-    with open(sub_tr_dir) as f:
-        sub_tr = json.load(f)
-    with open(sub_te_dir) as f:
-        sub_te = json.load(f)
-    subtitles = {**sub_tr,**sub_te}
-    
-    print("Preprocessing...")
-    corpus_set = []
-    for key, value in subtitles.items():
-        value = rawtext_to_words(decontracted(value))
-        value = infer_spaces(''.join(value.split()))
-        subtitles[key] = value
-        corpus_set.append(value) 
-    
-    ## bag-of-word feature
-    vectorizer = CountVectorizer(analyzer="word",tokenizer=None,preprocessor=None,stop_words=None,max_features=1000)
-    data_features = vectorizer.fit_transform(corpus_set)
-    data_features = data_features.toarray()
-    data_features.shape
-    
-    ## tfidf matrix
-    vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(corpus_set) 
-    word_lst = vectorizer.vocabulary_
-    
-    ## get word_embedding_matrix using GloVe
-    if os.path.isfile('./../data/glove.42B.300d.txt'):
-        pass
-    else:
-        urllib.request.urlretrieve("https://nlp.stanford.edu/data/wordvecs/glove.42B.300d.zip", filename="./../data/glove.42B.300d.zip")
-        with zipfile.ZipFile('./../data/glove.42B.300d.zip', 'r') as z:
-            z.extractall('./../data/')
-    
-    glove_dic = loadGloveModel('../data/glove.42B.300d.txt')
-    glove_matrix = []
-    invalid_lst = {}
-    for i, word in enumerate(word_lst):
-        try:
-            glove_matrix.append(glove_dic[word])
-        except:
-            invalid_lst[i] = word
-    
-    ## tfidf-GloVe feature 
-    tfidf_matrix_deleted = np.delete(tfidf_matrix.todense().T, tuple(list(invalid_lst)), axis = 0)
-    text_glove_matrix = np.matmul(tfidf_matrix_deleted.T, np.array(glove_matrix))   
-    
-    ## prepare target label
-    label_train = pd.read_csv(label_train_dir)
+    label_test_dir = './../data/original/tags_test.csv'
     label_test = pd.read_csv(label_test_dir)
-    labels = pd.concat([label_train,label_test]) 
-    labels['LabelConfidencePairs'] = labels['LabelConfidencePairs'].apply(lambda x: x.split()[0::2])
-    label_encoded = labels['LabelConfidencePairs'].str.join('|').str.get_dummies()
-    label_encoded.columns = list(map( int , label_encoded.columns ))
-    label_encoded = label_encoded.reindex(sorted(label_encoded.columns), axis=1)
-    label_encoded = np.array(label_encoded).astype(float) 
-    train_y = label_encoded[:label_train.shape[0],]
-    test_y = label_encoded[label_train.shape[0]:,]
+
+    prep_dir = os.path.join("../", "data", "prep" + NUM_PREPROCESS)
     
-    ## xgboost classifier
-    print("Training...")
-    params = {'max_depth':6, 'eta':0.4, 'colsample_bytree':0.3, 'silent': 1, 'booster':'gbtree', 'objective':'binary:logistic'}
-    
-    
-    
-    npdtrain = np.load("prep" + NUM_PREPROCESS + "/npdtrain-" + NUM_PREPROCESS + ".npy")
-    npdtest = np.load("prep" + NUM_PREPROCESS + "/npdtest-" + NUM_PREPROCESS + ".npy")
-    train_y = np.load("prep" + NUM_PREPROCESS + "/train_y-" + NUM_PREPROCESS + ".npy")
-    test_y = np.load("prep" + NUM_PREPROCESS + "/test_y-" + NUM_PREPROCESS + ".npy")
-    
-    #data_features = np.concatenate((data_features,text_glove_matrix), axis=1)
-    #dtest = xgb.DMatrix(data_features[label_train.shape[0]:,:])
+    npdtrain = np.load(os.path.join(prep_dir, "npdtrain.npy"))
+    npdtest = np.load(os.path.join(prep_dir, "npdtest.npy"))
+    train_y = np.load(os.path.join(prep_dir, "train_y.npy"))
+    test_y = np.load(os.path.join(prep_dir, "test_y.npy"))
     
     dtest = xgb.DMatrix(npdtest)
     
+    # live spliting of train and test data
+    X_train, X_val, y_train, y_val = train_test_split(npdtrain, train_y, test_size=0.20)
+    dval = xgb.DMatrix(X_val)
+
+    pred_val = []
     pred_test = []
-    num_class = 22
-    for i in range(num_class): 
-        print('Tag {}'.format(i))
+
+    ## xgboost classifier
+    print("Training...")
+    test_num = 0
+    
+    ## NOTE: INSERT FOR LOOP
+
+    pred_test_dir = os.path.join('../', 'output', OUTPUT_PREFIX + test_num)
+    test_num += 1
+    os.mkdir(pred_test_dir)
+
+    params = {'max_depth':5, 'eta':0.4, 'colsample_bytree':0.3, 'silent': 1, 'booster':'gbtree', 'objective':'binary:logistic'}
+    our_params = {'confidence_threshold': 0.1}
+    print("For {}, Our params:".format(OUTPUT_PREFIX + test_num), params, our_params)
+
+    for i in range(NUM_CLASS):
         ## training
-        dtrain = xgb.DMatrix(npdtrain, train_y[:,i])
-        #original line: dtrain = xgb.DMatrix(data_features[:label_train.shape[0],:], train_y[:,i])
+        dtrain = xgb.DMatrix(X_train, y_train[:,i])
         clf = xgb.train(params, dtrain, num_boost_round=15)
+        ## validation
+        pred1 = clf.predict(dval)
+        pred_val.append(pred1)
         ## test
-        pred = clf.predict(dtest)
-        pred_test.append(pred)
-        
+        pred2 = clf.predict(dtest)
+        pred_test.append(pred2)
+
+    # Validate data
+    pred_val = pd.DataFrame(np.array(pred_val).transpose())
+    pred_val['LabelConfidencePairs'] = pred_val.iloc[:, 0:22].apply(lambda x: label_conf_pair(x, threshold=our_params['confidence_threshold']), axis=1)
+    pred_val['Labels'] = pd.DataFrame(y_val).apply(lambda x: label_conf_pair(x, threshold=0.5), axis=1)
+    pred_val = pred_val[['LabelConfidencePairs', 'Labels']]
+    print('Validation GAP score: {}'.format(gap(pred_val)))
+
+    # Create submission file - IGNORE ANYTHING BELONG
     print('Creating Submission File...')
     pred_test = pd.DataFrame(np.array(pred_test).transpose())
     pred_test['AudioId'] = label_test['AudioId']    
     pred_test = pd.merge(label_test, pred_test, on = 'AudioId')
     pred_test['Labels'] = pred_test['LabelConfidencePairs'] 
-    pred_test['LabelConfidencePairs'] = pred_test.iloc[:,2:24].apply(label_conf_pair, axis=1)
+    pred_test['LabelConfidencePairs'] = pred_test.iloc[:,2:24].apply(lambda x: label_conf_pair(x, threshold=our_params['confidence_threshold']), axis=1)
     pred_test = pred_test[['AudioId','LabelConfidencePairs']]
-    pred_test.to_csv(pred_test_dir, index=False)
-
-    print('###### Run time: %d seconds.' %(time.time()-start))
+    submission_output = os.path.join(pred_test_dir, 'baseline_prediction.csv')
+    pred_test.to_csv(submission_output, index=False)
     
 if __name__ == "__main__":
     main()

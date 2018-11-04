@@ -85,11 +85,7 @@ def loadGloveModel(gloveFile):
     print ("Done.",len(model)," words loaded!")
     return model
 
-def label_conf_pair(x, k = 5):
-    return ' '.join(["{} {:.4f}".format(a_, b_) for a_, b_ in zip(x.sort_values(ascending=False).index.values[:k], x.sort_values(ascending=False).values[:k])])
-
 def main():
-    start = time.time()
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--sub_tr_dir", type=str, help="training subtitles, a json file", default = './../data/original/subtitle_train.json')
@@ -171,23 +167,17 @@ def main():
     
     # Cache the features
     data_features  = np.concatenate((data_features,text_glove_matrix), axis=1)
-    #x_train = data_features[label_train.shape[0]:,:]
     
-    os.mkdir("prep" + NUM_PREPROCESS)
-    
-    np.save("prep" + NUM_PREPROCESS + "/train_y-" + NUM_PREPROCESS + ".npy", train_y)
-    np.save("prep" + NUM_PREPROCESS + "/test_y-" + NUM_PREPROCESS + ".npy", test_y)
-    
+    prep_dir = os.path.join("../", "data", "prep" + NUM_PREPROCESS)
+
+    os.mkdir(prep_dir)
+    np.save(os.path.join(prep_dir, "train_y.npy"), train_y)
+    np.save(os.path.join(prep_dir, "test_y.npy"), test_y)
     ## Check whether the indexing for dtest and dtrain are swapped? If so swap them:
     npdtest = data_features[label_train.shape[0]:,:]
-    np.save("prep" + NUM_PREPROCESS + "/npdtest-" + NUM_PREPROCESS + ".npy", npdtest)
+    np.save(os.path.join(prep_dir, "npdtest.npy"), npdtest)
     npdtrain = data_features[:label_train.shape[0],:]
-    np.save("prep" + NUM_PREPROCESS + "/npdtrain-" + NUM_PREPROCESS + ".npy", npdtrain)
-
-    #dtest = xgb.DMatrix(data_features[label_train.shape[0]:,:])
-    #dtrain = xgb.DMatrix(data_features[:label_train.shape[0],:], train_y[:,i])
-
-    import pdb;pdb.set_trace()
+    np.save(os.path.join(prep_dir, "npdtrain.npy"), npdtrain)
 
 
     
