@@ -2,7 +2,7 @@
 
 ## Submission Details
 
-(1) Submission file is located in model/baseline_prediction.csv
+(1) Submission file is best_submission.csv
 (2) Documented Model is in model/model-i where i refers to the i-th tag and the models are xgboost models. The parameters used to reach the model state are max_depth:5, eta:0.34, colsample_bytree:0.8, confidence_threshold:0.8, boost_rounds:5.
 (2) Training and Inference Scripts are located in src/train.py. To reproduce the result, please follow the instructions at the bottom.
 
