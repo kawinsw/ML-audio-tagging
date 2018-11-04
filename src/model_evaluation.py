@@ -87,12 +87,9 @@ def main():
     for i in range(NUM_CLASS):
         ## validation
         clf = xgb.Booster({'nthread': 4}) 
-        clf.load_model('../output/test26/model-' + str(i))
+        clf.load_model('../output/test4/model-' + str(i))
         pred1 = clf.predict(dval)
         pred_val.append(pred1)
-        ## test
-        pred2 = clf.predict(dtest)
-        pred_test.append(pred2)
 
     # Validate data
     pred_val = pd.DataFrame(np.array(pred_val).transpose())
@@ -100,6 +97,7 @@ def main():
     pred_val['Labels'] = pd.DataFrame(train_y).apply(lambda x: label_conf_pair(x, threshold=0.5), axis=1)
     pred_val = pred_val[['LabelConfidencePairs', 'Labels']]
     score = gap(pred_val)
+    import pdb;pdb.set_trace()
     print('Validation GAP score: {}'.format(gap(pred_val)))
     
 if __name__ == "__main__":

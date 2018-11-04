@@ -10,12 +10,12 @@ import argparse
 
 from sklearn.model_selection import train_test_split
 import numpy as np
-np.random.seed(11235) 
+np.random.seed(8423) 
 import pandas as pd
 import xgboost as xgb
 import average_precision_calculator
 
-NUM_PREPROCESS = "01"
+NUM_PREPROCESS = "04"
 OUTPUT_PREFIX = "test"
 
 # DO NOT CHANGE THE FOLLOWING VAR
@@ -78,9 +78,6 @@ def main():
     
     dtest = xgb.DMatrix(npdtest)
     
-    # live spliting of train and test data
-    X_train, X_val, y_train, y_val = train_test_split(npdtrain, train_y, test_size=0.20)
-    dval = xgb.DMatrix(X_val)
 
 
     ## xgboost classifier
@@ -92,21 +89,28 @@ def main():
     ## NOTE: INSERT FOR LOOP
     for l in range(1, 10):
         for j in range(1, 10):
+        
+            # live spliting of train and test data
+            X_train, X_val, y_train, y_val = train_test_split(npdtrain, train_y, test_size=0.20)
+            dval = xgb.DMatrix(X_val)
+            
             pred_test_dir = os.path.join('../', 'output', OUTPUT_PREFIX + str(test_num))
             test_num += 1
-            #os.mkdir(pred_test_dir)
 
-            params = {'max_depth':l, 'eta':0.34, 'colsample_bytree':0.3, 'silent': 1, 'booster':'gbtree', 'objective':'binary:logistic'}
-            our_params = {'confidence_threshold': 0.1 * j}
+            params = {'max_depth':5, 'eta':0.34, 'colsample_bytree':0.8, 'silent': 1, 'booster':'gbtree', 'objective':'binary:logistic', 'min-child-weight':l}
+            our_params = {'confidence_threshold': 0.8}
             #print("For {}, Our params:".format(OUTPUT_PREFIX + str(test_num)), params, our_params)
 
             pred_val = []
             pred_test = []
+            modellist = []
             
             for i in range(NUM_CLASS):    
                 ## training
                 dtrain = xgb.DMatrix(X_train, y_train[:,i])
-                clf = xgb.train(params, dtrain, num_boost_round=15)
+                clf = xgb.train(params, dtrain, num_boost_round=6 + l)
+                modellist.append(clf)
+                
                 ## validation
                 pred1 = clf.predict(dval)
                 pred_val.append(pred1)
@@ -121,18 +125,25 @@ def main():
             pred_val = pred_val[['LabelConfidencePairs', 'Labels']]
             score = gap(pred_val)
             res[l - 1, j - 1] = score
-            #print('Validation GAP score: {}'.format(gap(pred_val)))
+            
+            
+            if score > 0.9:
+                os.mkdir(pred_test_dir)
+                for i, mod in enumerate(modellist):
+                    mod.save_model(os.path.join(pred_test_dir, 'model-'+ str(i)))
+                    
+                #print('Validation GAP score: {}'.format(gap(pred_val)))
 
-            # Create submission file - IGNORE ANYTHING BELONG
-            #print('Creating Submission File...')
-            # pred_test = pd.DataFrame(np.array(pred_test).transpose())
-            # pred_test['AudioId'] = label_test['AudioId']    
-            # pred_test = pd.merge(label_test, pred_test, on = 'AudioId')
-            # pred_test['Labels'] = pred_test['LabelConfidencePairs']
-            # pred_test['LabelConfidencePairs'] = pred_test.iloc[:,2:24].apply(lambda x: label_conf_pair(x, threshold=our_params['confidence_threshold']), axis=1)
-            # pred_test = pred_test[['AudioId','LabelConfidencePairs']]
-            # submission_output = os.path.join(pred_test_dir, 'baseline_prediction.csv')
-            # pred_test.to_csv(submission_output, index=False)
+                # Create submission file - IGNORE ANYTHING BELONG
+                print('Creating Submission File...')
+                pred_test = pd.DataFrame(np.array(pred_test).transpose())
+                pred_test['AudioId'] = label_test['AudioId']    
+                pred_test = pd.merge(label_test, pred_test, on = 'AudioId')
+                pred_test['Labels'] = pred_test['LabelConfidencePairs']
+                pred_test['LabelConfidencePairs'] = pred_test.iloc[:,2:24].apply(lambda x: label_conf_pair(x, threshold=our_params['confidence_threshold']), axis=1)
+                pred_test = pred_test[['AudioId','LabelConfidencePairs']]
+                submission_output = os.path.join(pred_test_dir, 'baseline_prediction.csv')
+                pred_test.to_csv(submission_output, index=False)
     
     print(res)
 if __name__ == "__main__":
