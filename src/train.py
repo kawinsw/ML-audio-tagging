@@ -91,10 +91,10 @@ def main():
     start = time.time()
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sub_tr_dir", type=str, help="training subtitles, a json file", default = './../data/subtitle_train.json')
-    parser.add_argument("--sub_te_dir", type=str, help="testing subtitles, a json file", default = './../data/subtitle_test.json')
-    parser.add_argument("--label_train_dir", type=str, help="training tags, a csv file", default = './../data/tags_train.csv')
-    parser.add_argument("--label_test_dir", type=str, help="sample submission file, a csv file", default = './../data/tags_test.csv')
+    parser.add_argument("--sub_tr_dir", type=str, help="training subtitles, a json file", default = './../data/original/subtitle_train.json')
+    parser.add_argument("--sub_te_dir", type=str, help="testing subtitles, a json file", default = './../data/original/subtitle_test.json')
+    parser.add_argument("--label_train_dir", type=str, help="training tags, a csv file", default = './../data/original/tags_train.csv')
+    parser.add_argument("--label_test_dir", type=str, help="sample submission file, a csv file", default = './../data/original/tags_test.csv')
     parser.add_argument("--pred_test_dir", type=str, help="submission file to save, a csv file", default = './../data/baseline_prediction.csv')
 
     args = parser.parse_args()
@@ -102,7 +102,7 @@ def main():
     sub_te_dir = args.sub_te_dir
     label_train_dir = args.label_train_dir
     label_test_dir = args.label_test_dir
-    pred_test_dir = args.pred_test_dir    
+    pred_test_dir = args.pred_test_dir
 
     ## load subtitles
     with open(sub_tr_dir) as f:

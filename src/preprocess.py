@@ -89,22 +89,21 @@ def label_conf_pair(x, k = 5):
     return ' '.join(["{} {:.4f}".format(a_, b_) for a_, b_ in zip(x.sort_values(ascending=False).index.values[:k], x.sort_values(ascending=False).values[:k])])
 
 def main():
-
     start = time.time()
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sub_tr_dir", type=str, help="training subtitles, a json file", default = './../data/subtitle_train.json')
-    parser.add_argument("--sub_val_dir", type=str, help="val subtitles, a json file", default = './../data/subtitle_val.json')
-    parser.add_argument("--sub_te_dir", type=str, help="testing subtitles, a json file", default = './../data/origina/subtitle_test.json')
-    parser.add_argument("--label_train_dir", type=str, help="training tags, a csv file", default = './../data/tags_train.csv')
-    parser.add_argument("--label_val_dir", type=str, help="val tags, a csv file", default = './../data/tags_val.csv')
-    parser.add_argument("--label_test_dir", type=str, help="sample submission file, a csv file", default = './../data/original/test.csv')
+    parser.add_argument("--sub_tr_dir", type=str, help="training subtitles, a json file", default = './../data/original/subtitle_train.json')
+    parser.add_argument("--sub_te_dir", type=str, help="testing subtitles, a json file", default = './../data/original/subtitle_test.json')
+    parser.add_argument("--label_train_dir", type=str, help="training tags, a csv file", default = './../data/original/tags_train.csv')
+    parser.add_argument("--label_test_dir", type=str, help="sample submission file, a csv file", default = './../data/original/tags_test.csv')
+    parser.add_argument("--pred_test_dir", type=str, help="submission file to save, a csv file", default = './../data/baseline_prediction.csv')
 
     args = parser.parse_args()
     sub_tr_dir = args.sub_tr_dir
     sub_te_dir = args.sub_te_dir
     label_train_dir = args.label_train_dir
     label_test_dir = args.label_test_dir
+    pred_test_dir = args.pred_test_dir
     # NOTE: This is the output file
     
     pred_test_dir = "../" 
@@ -123,7 +122,6 @@ def main():
         value = infer_spaces(''.join(value.split()))
         subtitles[key] = value
         corpus_set.append(value)
-        print("key", key)
 
     import pdb;pdb.set_trace()
     
