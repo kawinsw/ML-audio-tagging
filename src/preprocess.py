@@ -122,8 +122,6 @@ def main():
         value = infer_spaces(''.join(value.split()))
         subtitles[key] = value
         corpus_set.append(value)
-
-    import pdb;pdb.set_trace()
     
     ## bag-of-word feature
     vectorizer = CountVectorizer(analyzer="word",tokenizer=None,preprocessor=None,stop_words=None,max_features=1000)
@@ -173,10 +171,21 @@ def main():
     
     # Cache the features
     data_features  = np.concatenate((data_features,text_glove_matrix), axis=1)
-    x_train = data_features[label_train.shape[0]:,:]
+    #x_train = data_features[label_train.shape[0]:,:]
+    
+    os.mkdir("prep" + NUM_PREPROCESS)
+    
+    np.save("prep" + NUM_PREPROCESS + "/train_y-" + NUM_PREPROCESS + ".npy", train_y)
+    np.save("prep" + NUM_PREPROCESS + "/test_y-" + NUM_PREPROCESS + ".npy", test_y)
+    
+    ## Check whether the indexing for dtest and dtrain are swapped? If so swap them:
+    npdtest = data_features[label_train.shape[0]:,:]
+    np.save("prep" + NUM_PREPROCESS + "/npdtest-" + NUM_PREPROCESS + ".npy", npdtest)
+    npdtrain = data_features[:label_train.shape[0],:]
+    np.save("prep" + NUM_PREPROCESS + "/npdtrain-" + NUM_PREPROCESS + ".npy", npdtrain)
 
-    dtest = xgb.DMatrix(data_features[label_train.shape[0]:,:])
-    dtrain = xgb.DMatrix(data_features[:label_train.shape[0],:], train_y[:,i])
+    #dtest = xgb.DMatrix(data_features[label_train.shape[0]:,:])
+    #dtrain = xgb.DMatrix(data_features[:label_train.shape[0],:], train_y[:,i])
 
     import pdb;pdb.set_trace()
 

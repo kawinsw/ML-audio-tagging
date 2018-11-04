@@ -16,6 +16,8 @@ np.random.seed(1111)
 import pandas as pd
 import xgboost as xgb
 
+NUM_PREPROCESS = "01"
+
 def decontracted(phrase): # to be fixed for all cases 
     ## specific
     phrase = re.sub(r"won't", "will not", phrase)
@@ -167,14 +169,25 @@ def main():
     print("Training...")
     params = {'max_depth':6, 'eta':0.4, 'colsample_bytree':0.3, 'silent': 1, 'booster':'gbtree', 'objective':'binary:logistic'}
     
-    data_features  = np.concatenate((data_features,text_glove_matrix), axis=1)
-    dtest = xgb.DMatrix(data_features[label_train.shape[0]:,:])
+    
+    
+    npdtrain = np.load("prep" + NUM_PREPROCESS + "/npdtrain-" + NUM_PREPROCESS + ".npy")
+    npdtest = np.load("prep" + NUM_PREPROCESS + "/npdtest-" + NUM_PREPROCESS + ".npy")
+    train_y = np.load("prep" + NUM_PREPROCESS + "/train_y-" + NUM_PREPROCESS + ".npy")
+    test_y = np.load("prep" + NUM_PREPROCESS + "/test_y-" + NUM_PREPROCESS + ".npy")
+    
+    #data_features = np.concatenate((data_features,text_glove_matrix), axis=1)
+    #dtest = xgb.DMatrix(data_features[label_train.shape[0]:,:])
+    
+    dtest = xgb.DMatrix(npdtest)
+    
     pred_test = []
     num_class = 22
     for i in range(num_class): 
         print('Tag {}'.format(i))
         ## training
-        dtrain = xgb.DMatrix(data_features[:label_train.shape[0],:], train_y[:,i])
+        dtrain = xgb.DMatrix(npdtrain, train_y[:,i])
+        #original line: dtrain = xgb.DMatrix(data_features[:label_train.shape[0],:], train_y[:,i])
         clf = xgb.train(params, dtrain, num_boost_round=15)
         ## test
         pred = clf.predict(dtest)
